@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<title>广西移动</title>
+
+<meta name="keywords" content="keyword1,keyword2,keyword3">
+<meta name="description" content="this is my page">
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0" />
+
+<link rel="stylesheet" href="datetimepicker/css/amazeui.css" />
+<link rel="stylesheet" href="datetimepicker/css/amazeui.datetimepicker.css" />
+<link rel="stylesheet" href="jqGrid/css/ui.jqgrid-bootstrap.css" />
+<link rel="stylesheet" href="select2/select2.min.css" />
+
+<link rel="stylesheet" href="bootstrap/css/bootstrap.css" />
+
+<style type="text/css">
+
+body{
+	min-width: 1020px;
+}
+.frame{
+	width: 980px;
+	margin-right: auto;
+    margin-left: auto;
+}
+.select2{
+	width: 180px;
+}
+</style>
+
+<script type="text/javascript" src="plugin/jquery-3.2.1.min.js"></script>
+<script type="text/javascript" src="plugin/js.cookie.js"></script>
+<script type="text/javascript" src="plugin/jszip.min.js"></script>
+<script type="text/javascript" src="plugin/echarts.min.js"></script>
+
+<script type="text/javascript" src="bootstrap/js/bootstrap.min.js"></script>
+
+<script type="text/javascript" src="datetimepicker/js/amazeui.js"></script>
+<script type="text/javascript" src="datetimepicker/js/amazeui.datetimepicker.js"></script>
+<script type="text/javascript" src="datetimepicker/js/amazeui.datetimepicker.zh-CN.js"></script>
+
+<script type="text/javascript" src="jqGrid/js/jquery.jqGrid.min.js"></script>
+<script type="text/javascript" src="jqGrid/js/grid.locale-cn.js"></script>
+
+<script type="text/javascript" src="select2/select2.min.js"></script>
+
+
+<script type="text/javascript">
+	$(function() {
+
+		var cookies = Cookies.get();
+ 		if(Cookies.get('loginUser') == null){
+			window.location.href = "login.html";
+			return;
+		}
+
+		var host = window.location.href;
+		var ChartObj = echarts.init($("#chart")[0]);
+		var gridStack = [];
+		$(".select2").select2();
+		
+		
+		queryDate();
+
+		function queryGridData(params){
+			$.ajax({
+				"url" : params.url,
+				"type" : "POST",
+				"data" : JSON.stringify(params.postData),
+				"dataType" : "json",
+				"contentType" : "application/json;charest=UTF-8",
+				"success" : params.success,
+				"error" : function() {
+					alert("ERROR!");
+				}
+			});
+		}
+		
+		function showGrid(params){
+			if(params.data == null){
+				alert("未找到数据");
+				return;
+			}
+			$.jgrid.gridUnload("table");
+			$("#table").jqGrid({
+				styleUI : 'Bootstrap',
+				data : params.data,
+				datatype : "local",
+				height : 'auto',
+				autowidth : true,
+				colNames : params.colNames,
+				colModel : params.colModel,
+				rowNum : 10,
+				rowList : [ 10, 20, 30 ],
+				pager : "#pager",
+				sortname : params.sortname,
+				sortorder : params.sortorder,
+				caption : params.caption,
+				viewrecords : true,
+				rownumbers: true,
+				shrinkToFit : false,
+				emptyrecords : "无数据记录",
+				ondblClickRow : params.ondblClickRow
+			}).jqGrid("navGrid", "#pager", {
+				edit : false,
+				add : false,
+				del : false,
+				beforeRefresh : function(){
+					var params = gridStack[gridStack.length-1];
+					if(params.postData.dates != null){
+						params.postData.dates = getTimeRange();
+					}
+					queryGridData(params);
+				}
+			},
+			{},
+			{},
+			{},
+			{
+				closeOnEscape: true,
+				multipleSearch : true,
+				multipleGroup : false
+			}).jqGrid("navButtonAdd","#pager",{
+				caption : "返回上一级",
+				id : "backButton",
+				cursor : "pointer",
+				buttonicon : "ui-icon-arrowthick-1-n",
+				onClickButton : function() {
+					if (gridStack.length > 1) {
+						gridStack.pop();
+						var params = gridStack[gridStack.length-1];
+						if(params.postData.dates != null){
+							params.postData.dates = getTimeRange();
+						}
+						queryGridData(params);
+					}
+				}
+			}).jqGrid("navButtonAdd","#pager",{
+				caption : "导出Excel",
+				id : "exportButton",
+				cursor : "pointer",
+				buttonicon : "ui-icon-extlink",
+				onClickButton : function() {
+					$("#table").jqGrid("exportToExcel",{
+						fileName : params.caption + ".xlsx",
+					});
+				}
+			}).jqGrid("setLabel","rn","序号",{"text-align":"left","min-width":"40px"});
+		}
+
+		function initTimeRange(dateList) {
+			var startTime = new Date(dateList[0].replace(/-/g, "/") + " 00:00");
+			var endTime = new Date(dateList[dateList.length-1].replace(/-/g, "/") + " 00:00");
+			endTime.setDate(endTime.getDate()+1);
+			var option = {
+				format : 'yyyy/mm/dd hh:ii',
+				minuteStep : 5,
+				todayBtn : true,
+				language : "zh-CN",
+				autoclose : true,
+				startDate : startTime,
+				endDate : endTime
+			};
+			$("#startDatetime").datetimepicker(option);
+			$("#endDatetime").datetimepicker(option);
+			$("#startDatetime").datetimepicker("update",startTime);
+			$("#endDatetime").datetimepicker("update",endTime);
+		}
+
+		function getTimeRange(){
+			return [$("#startDatetime")[0].value+":00", $("#endDatetime")[0].value+":00"];
+		}
+
+		function initCellSelector(data_allCell){
+			var cells = [];
+			for(var index in data_allCell){
+				var cellID = data_allCell[index].enodbId + data_allCell[index].cellId_n;
+				cells.push({
+					id : cellID,	//value of the option
+					text : cellID	//text in the option
+				});
+			}
+			$("#cellSelector").select2({
+				data:cells,
+				placeholder:"选择小区(默认全选)",
+				allowClear:true
+			});
+		}
+
+		function queryDate() {
+			var params = {
+				"url" : host + "Cell/findTimeList.do",
+				"postData" : {},
+				"success" : function(data) {
+					initTimeRange(data.sort());
+					queryCells();
+				},
+			};
+			queryGridData(params);
+		}
+
+		function queryCells() {
+			var postData = {
+				dates : getTimeRange()
+			};
+			var params = {
+				"url" : host + "Cell/findAllCell.do",
+				"postData" : postData,
+				"success" : function(data_allCell) {
+					showAllCellList(data_allCell);
+					initCellSelector(data_allCell);
+				}
+			};
+			queryGridData(params);
+			gridStack.push(params);
+		}
+
+		function showAllCellList(data_allCell) {
+			var params = {
+				data : data_allCell,
+				colNames : [ "eNB-ID", "cellID_n","最近上报次数" ],
+				colModel : [
+					{
+						name : "enodbId",
+						index : "enodbId",
+						sorttype:'integer'
+					},
+					{
+						name : "cellId_n",
+						index : "cellId_n",
+						sorttype:'integer'
+					},
+					{
+						name : "resport_nums",
+						index : "resport_nums",
+						sorttype:'integer'
+					}
+				],
+				sortname : "resport_nums",
+				sortorder : "desc",
+				caption : "全网监测",
+				ondblClickRow : function(rowid, iRow, iCol, e) {
+					var rowData = $("#table").jqGrid("getRowData", rowid);
+					var cellid = rowData.enodbId + rowData.cellId_n;
+					$("#cellSelector").val(cellid).trigger("change");
+					queryUsers(cellid);
+				}
+			};
+			showGrid(params);
+		}
+
+		function queryUsers(cellid) {
+			var postData = {
+				cellid : cellid,
+				dates : getTimeRange()
+			};
+			var params = {
+				"url" : host + "Cell/findCellData.do",
+				"postData" : postData,
+				"success" : function(data_everyUser) {
+					showUserList(cellid, data_everyUser);
+				}
+			};
+			queryGridData(params);
+			gridStack.push(params);
+		}
+
+		function showUserList(cellid, data_everyUser) {
+			var params = {
+				data : data_everyUser,
+				colNames : [ "IMSI", "手机品牌", "手机型号", "上报数量" ],
+				colModel : [
+					{
+						name : "imsi",
+						index : "imsi",
+						sorttype:'integer'
+					},
+					{
+						name : "deviceBrand",
+						index : "deviceBrand"
+					},
+					{
+						name : "deviceModel",
+						index : "deviceModel"
+					},
+					{
+						name : "recordnums",
+						index : "recordnums",
+						sorttype:'integer'
+					}
+				],
+				sortname : "imsi",
+				sortorder : "desc",
+				caption : "小区记录",
+				ondblClickRow : function(rowid, iRow, iCol, e) {
+					var rowdata = $("#table").jqGrid("getRowData", rowid);
+					queryOneUser(cellid, rowdata.imsi);
+				}
+			};
+			showGrid(params);
+		}
+
+		function queryOneUser(cellid, imsi) {
+			var postData = {
+				cellid : cellid,
+				imsi : imsi,
+				dates : getTimeRange()
+			};
+			var params = {
+				"url" : host + "user/findUserData.do",
+				"postData" : postData,
+				"success" : function(data_oneUser) {
+					showOneUser(imsi, data_oneUser);
+				}
+			};
+			queryGridData(params);
+			gridStack.push(params);
+		}
+
+		function showOneUser(imsi, data_oneUser) {
+			for(index in data_oneUser){
+				data_oneUser[index].cpuRate = parseFloat(data_oneUser[index].cpuRate).toFixed(2);
+				data_oneUser[index].memoryrate = parseFloat(data_oneUser[index].memoryrate).toFixed(2);
+			}
+			var params = {
+				data : data_oneUser,
+				colNames : [ "时间", "系统版本", "APP", "CPU占用率", "内存占用率", "OMC_ID","网络类型" ],
+				colModel : [
+					{
+						name : "recorddate",
+						index : "recorddate",
+						sorttype:'string'
+					},
+					{
+						name : "androidVersion",
+						index : "androidVersion",
+						sorttype:'integer'
+					},
+					{
+						name : "appName",
+						index : "appName"
+					},
+					{
+						name : "cpuRate",
+						index : "cpuRate",
+						sorttype:'float'
+					},
+					{
+						name : "memoryrate",
+						index : "memoryrate",
+						sorttype:'float'
+					},
+					{
+						name : "omcid",
+						hidden : true
+					},
+					{
+						name : "networkType",
+						hidden : true
+					}
+				],
+				sortname : "recorddate",
+				sortorder : "desc",
+				caption : "用户上报记录",
+				ondblClickRow : function(rowid, iRow, iCol, e) {
+					var rowdata = $("#table").jqGrid("getRowData", rowid);
+					queryKPI(imsi, rowdata.omcid, rowdata.recorddate, rowdata.networkType);
+				}
+			};
+			showGrid(params);
+		}
+
+		function queryKPI(imsi, omcid, recorddate, networkType) {
+			var postData = {
+				imsi : imsi,
+				omcid : omcid,
+				dates : [ recorddate, recorddate ]
+			};
+			var params = {
+				"url" : host + "user/findOmc_Kpi.do",
+				"postData" : postData,
+				"success" : function(data_oneRecord) {
+					showKPI(networkType, data_oneRecord,omcid);
+				}
+			};
+			queryGridData(params);
+			gridStack.push(params);
+		}
+
+		function showKPI(networkType, data_oneRecord,omcid) {
+			for (var i = 0; i < data_oneRecord.length; i++) {
+				var elem = data_oneRecord[i];
+				elem.networkType = networkType;
+				elem.access = Math.round(elem.access);
+				elem.maintain = Math.round(elem.maintain);
+				elem.mobility = Math.round(elem.mobility);
+				elem.integri = Math.round(elem.integri);
+				elem.capacity = Math.round(elem.capacity);
+				elem.comprehensive = Math.round(elem.comprehensive);
+				elem.sendrate = Math.round(elem.sendrate);
+				elem.receiverate = Math.round(elem.receiverate);
+				elem.sinr = Math.round(elem.sinr);
+			}
+			var params = {
+				data : data_oneRecord,
+				colNames : [ "网络类型", "RSRP", "RSRQ", "SINR", "上行速率(kbps)", "下行速率(kbps)", "接入类指标", "保持类指标", "移动类指标", "完整类指标", "容量类指标", "综合指标" ],
+				colModel : [
+					{
+						name : "networkType",
+						index : "networkType"
+					},
+					{
+						name : "rsrp",
+						index : "rsrp",
+						sorttype:'integer'
+					},
+					{
+						name : "rsrq",
+						index : "rsrq",
+						sorttype:'integer'
+					},
+					{
+						name : "sinr",
+						index : "sinr",
+						sorttype:'integer'
+					},
+					{
+						name : "sendrate",
+						index : "sendrate",
+						sorttype:'integer'
+					},
+					{
+						name : "receiverate",
+						index : "receiverate",
+						sorttype:'integer'
+					},
+					{
+						name : "access",
+						index : "access",
+						sorttype:'integer'
+					},
+					{
+						name : "maintain",
+						index : "maintain",
+						sorttype:'integer'
+					},
+					{
+						name : "mobility",
+						index : "mobility",
+						sorttype:'integer'
+					},
+					{
+						name : "integri",
+						index : "integri",
+						sorttype:'integer'
+					},
+					{
+						name : "capacity",
+						index : "capacity",
+						sorttype:'integer'
+					},
+					{
+						name : "comprehensive",
+						index : "comprehensive",
+						sorttype:'integer'
+					},
+				],
+				sortname : "record_time",
+				sortorder : "desc",
+				caption : "无线环境及KPI指标",
+				ondblClickRow: function(omcid){
+					queryOMC(omcid);
+				}
+			};
+			showGrid(params);
+		}
+
+		function queryOMC(omcid) {
+				var postData = {
+					omcid : omcid
+				};
+				var params = {
+				"url" : host + "user/findomcdata.do",
+				"postData" : postData,
+				"success" : function(data_OMC){
+					showOMC(data_OMC);
+				}
+			};
+			queryGridData(params);
+			gridStack.push(params);
+		}
+		
+		function showOMC(data_OMC){
+			var colNames = [];
+			var colModel = [];
+			var colData = [{}];
+			for(var index in data_OMC){
+				for(var key in data_OMC[index]){
+					colNames.push(key);
+					colModel.push({
+						name : key,
+						index : key,
+						sorttype: "float"
+					});
+					colData[0][key] = data_OMC[index][key].toFixed(2);
+				}
+			}
+			var params = {
+				data : colData,
+				colNames : colNames,
+				colModel : colModel,
+				caption : "OMC具体内容"
+			};
+			showGrid(params);
+		}
+
+		function getUnorderedPieData(data){
+			var countData = [];
+			var legendData = [];
+			for (var key in data) {
+				countData.push({
+					name : key,
+					value : data[key].toFixed(3)
+				});
+				legendData.push(key);
+			}
+			return{
+				series:countData,
+				legend:legendData
+			}
+		}
+		
+		function getOrderedPieData(data){
+			var countData = [];
+			var legendData = [];
+			for(var i=0;i< data.length;i++){
+				for (var key in data[i]) {
+					countData.push({
+						name : key,
+						value : data[i][key].toFixed(3)
+					});
+					legendData.push(key);
+				}
+			}
+			return{
+				series:countData,
+				legend:legendData
+			}
+		}
+
+		function drawPieChart(params){
+			$.ajax({
+				"url" : params.url,
+				"data" : params.params,
+				"type" : "POST",
+				"dataType" : "json",
+				"contentType" : "application/json;charest=UTF-8",
+				"success" : function(data) {
+					var series_Legend = null;
+					if(params.isOrderedPie){
+						series_Legend = getOrderedPieData(data);
+					}else{
+						series_Legend = getUnorderedPieData(data);
+					}
+					var option = {
+						title : {
+							text : params.title,
+							subtext : params.subTitle,
+							x : 'center'
+						},
+						tooltip : {
+							trigger : 'item',
+							formatter : "{b} : {c}"
+						},
+						legend : {
+							orient : 'vertical',
+							left : 'left',
+							data : series_Legend.legend
+						},
+						series : [ {
+							name : '统计结果',
+							type : 'pie',
+							radius : '55%',
+							center : [ '50%', '60%' ],
+							data : series_Legend.series,
+							itemStyle : {
+								normal : {
+									label : {
+										show : true,
+										formatter : '{b} : {d}%'
+									}
+								},
+								emphasis : {
+									shadowBlur : 10,
+									shadowOffsetX : 0,
+									shadowColor : 'rgba(0, 0, 0, 0.5)'
+								}
+							}
+						}]
+					};
+					ChartObj.setOption(option);
+					pageResize();
+				},
+				"error":function(message) {
+					alert("ERROR! " + message);
+				}
+			});
+		}
+
+		function getStackedBarData(data){
+			var legendData = [];
+			var series = [];
+			var xAxisData = [];
+			for (var key in data) {
+				legendData.push(key);
+				var countData = [];
+				for (var i = 0; i < data[key].length; i++) {
+					for (var section in data[key][i]) {
+						if (xAxisData.length < data[key].length) {
+							xAxisData.push(section);
+						}
+						countData.push({
+							name : section,
+							value : data[key][i][section]
+						});
+					}
+				}
+
+				series.push({
+					name : key,
+					type : 'bar',
+					stack : 'one',
+					itemStyle : {
+						normal : {
+							label : {
+								show : true,
+							}
+						},
+						emphasis : {
+							barBorderWidth : 1,
+							shadowBlur : 10,
+							shadowOffsetX : 0,
+							shadowOffsetY : 0,
+							shadowColor : 'rgba(0,0,0,0.5)'
+						}
+					},
+					data : countData
+				});
+			}
+			return {
+				xAxis : xAxisData,
+				legend : legendData,
+				series : series
+			}
+		}
+		
+		function drawStackedBarChart(params){
+			$.ajax({
+				"url" : params.url,
+				"data" : params.params,
+				"type" : "POST",
+				"dataType" : "json",
+				"contentType" : "application/json;charest=UTF-8",
+				"success" : function(data) {
+					var xAxis_Legend_Series = getStackedBarData(data);
+					var option = {
+						title : {
+							text : params.title,
+							subtext : params.subTitle,
+							x : 'center'
+						},
+						legend : {
+							orient : 'vertical',
+							left : 'left',
+							data : xAxis_Legend_Series.legend
+						},
+						toolbox : {
+							feature : {
+								magicType : {
+									type : [ 'stack', 'tiled' ]
+								},
+								dataView : {}
+							}
+						},
+						xAxis : {
+							data : xAxis_Legend_Series.xAxis,
+							name : params.xAxisName,
+							silent : false,
+							axisLabel:{
+								formatter : params.formatter
+							},
+							axisLine : {
+								onZero : true
+							},
+							splitLine : {
+								show : false
+							},
+							splitArea : {
+								show : false
+							}
+						},
+						yAxis : {
+							splitArea : {
+								show : false
+							}
+						},
+						grid : {
+							left : 200
+						},
+						tooltip : {
+							trigger : 'item',
+							formatter : "{b} : {c}"
+						},
+						series : xAxis_Legend_Series.series
+					};
+					ChartObj.setOption(option);
+					pageResize();
+				},
+				"error":function(message) {
+					alert("ERROR! " + message);
+				}
+			});
+		}
+
+		$("#analysisType").change(function() {
+			$("#Item option").each(function() {
+				if ($(this).val() != "default") {
+					$(this).remove();
+				}
+			});
+			$("#Item option[value='default']").attr("selected", true);
+			$("#secondItem option").each(function() {
+				if ($(this).val() != "default") {
+					$(this).remove();
+				}
+			});
+			$("#secondItem option[value='default']").attr("selected", true);
+			var value = $(this).children('option:selected').val();
+			switch (value){
+			case "terminal":{
+				$("#Item").append("<option value='deviceBrand'>设备品牌</option>");
+				$("#Item").append("<option value='appName'>应用名称</option>");
+				$("#Item").append("<option value='cpuRate'>手机CPU占用率</option>");
+				$("#Item").append("<option value='memoryrate'>手机内存占用率</option>");
+				break;
+			}
+			case "wireless":{
+				$("#Item").append("<option value='RSRP'>RSRP</option>");
+				$("#Item").append("<option value='RSRQ'>RSRQ</option>");
+				$("#Item").append("<option value='SINR'>SINR</option>");
+				$("#Item").append("<option value='access'>接入类指标</option>");
+				$("#Item").append("<option value='maintain'>保持类指标</option>");
+				$("#Item").append("<option value='mobility'>移动类指标</option>");
+				$("#Item").append("<option value='integri'>完整类指标</option>");
+				$("#Item").append("<option value='capacity'>容量类指标</option>");
+				$("#Item").append("<option value='comprehensive'>综合指标</option>");
+				break;
+			}
+			case "relatation":{
+				$("#Item").append("<option value='deviceBrand'>设备品牌</option>");
+				$("#Item").append("<option value='cpuRate'>手机CPU占用率</option>");
+				$("#Item").append("<option value='memoryrate'>手机内存占用率</option>");
+				$("#Item").append("<option value='RSRP'>RSRP</option>");
+				$("#Item").append("<option value='RSRQ'>RSRQ</option>");
+				$("#Item").append("<option value='SINR'>SINR</option>");
+				$("#Item").append("<option value='receiverate'>下载速率</option>");
+				break;
+			}
+			}
+		});
+		
+		$("#Item").change(function(){
+			var type = $("#analysisType").children('option:selected').val();
+			if(type != "relatation"){
+				return ;
+			}
+			$("#secondItem option").each(function() {
+				if ($(this).val() != "default") {
+					$(this).remove();
+				}
+			});
+			$("#secondItem option[value='default']").attr("selected", true);
+			var value = $(this).children('option:selected').val();
+			if(value != "RSRP" && value != "RSRQ" && value != "SINR"){
+				$("#secondItem").append("<option value='RSRP'>RSRP</option>");
+				$("#secondItem").append("<option value='RSRQ'>RSRQ</option>");
+				$("#secondItem").append("<option value='SINR'>SINR</option>");
+			}
+			$("#secondItem").append("<option value='access'>接入类指标</option>");
+			$("#secondItem").append("<option value='maintain'>保持类指标</option>");
+			$("#secondItem").append("<option value='mobility'>移动类指标</option>");
+			$("#secondItem").append("<option value='integri'>完整类指标</option>");
+			$("#secondItem").append("<option value='capacity'>容量类指标</option>");
+			$("#secondItem").append("<option value='comprehensive'>综合指标</option>");
+		});
+		
+		$("#showChart").click(function() {
+			if (ChartObj != null) {
+				ChartObj.clear();
+			}
+			var analysisType = $("#analysisType").children('option:selected').val();
+			var item = $("#Item").children('option:selected').val();
+			var secondItem = $("#secondItem").children('option:selected').val();
+			
+			var params = {};
+			var arr = getTimeRange();
+			var ordered = true;
+			if(analysisType == "terminal" || analysisType == "wireless"){
+				if(item == "deviceBrand" || item == "appName"){
+					params.title = "异常事件终端原因统计";
+					params.url = host + "allCell/countApp.do";
+					params.isOrderedPie = false;
+					params.params = "{\"cellid\" : " + null + ",\"type\" : \"" + item + "\" , \"dates\" : " + JSON.stringify(arr) + "}";
+				}else if(item == "cpuRate" || item == "memoryrate"){
+					params.title = "异常事件终端原因统计";
+					params.url = host + "allCell/countCpu_Memory.do";
+					params.isOrderedPie = true;
+					params.params = "{\"cellid\" : " + null + ",\"type\" : \"" + item + "\" , \"dates\" : " + JSON.stringify(arr) + "}";
+				}else if(item == "RSRP" || item == "RSRQ" || item == "SINR"){
+					params.title = "异常事件无线侧原因统计";
+					params.url = host + "allCell/countRsrp.do";
+					params.isOrderedPie = true;
+					params.params = "{\"cellid\" : " + null + ",\"type\" : \"" + item + "\" , \"dates\" : " + JSON.stringify(arr) + "}";
+				}else if(item == "access" || item == "maintain" || item == "mobility" || item == "integri" || item == "capacity" || item == "comprehensive"){
+					params.title = "异常事件无线侧原因统计";
+					params.url = host + "allCell/countKpi.do";
+					params.isOrderedPie = true;
+					params.params = "{\"index\" : \"" + item + "\" , \"dates\" : " + JSON.stringify(arr) + "}";
+				}
+				params.subTitle = translate(item);
+				drawPieChart(params);
+			} else if (analysisType == "relatation") {
+				var params = {};
+				var arr = getTimeRange();
+				params.subTitle = translate(item) + "与" + translate(secondItem);
+				params.formatter = function(val) {
+					return val.replace("<=", "<=\n");
+				};
+				if (item == "deviceBrand" || item == "cpuRate" || item == "memoryrate") {
+					params.xAxisName = translate(secondItem);
+					params.title = "异常事件终端与无线环境关联分析";
+					if (secondItem == "RSRP" || secondItem == "RSRQ" || secondItem == "SINR") {
+						params.params = "{\"type\" : \"" + item + "\", \"dates\" : " + JSON.stringify(arr) + "}",
+						params.url = host + "allCell/countRSRP_Terminal.do";
+					} else if(secondItem == "access" || secondItem == "maintain" || secondItem == "mobility" || secondItem == "integri" || secondItem == "capacity" || secondItem == "comprehensive") {
+						params.params = "{\"index\" : \"" + secondItem + "\",\"type\" : \"" + item + "\", \"dates\" : " + JSON.stringify(arr) + "}",
+						params.url = host + "allCell/countIndex_App.do";
+					}
+
+				}else if(item == "RSRP" || item == "RSRQ" || item == "SINR"){
+					params.xAxisName = translate(item);
+					params.title = "RSRP/RSRQ/SINR与KPI指标关联分析";
+					params.params = "{\"type\" : \"" + item + "\", \"index\" : \"" + secondItem + "\", \"dates\" : " + JSON.stringify(arr) + "}",
+					//params.params = "{\"cellid\" : \"" + null + "\",\"type\" : \"" + item + "\", \"index\" : \"" + secondItem + "\", \"dates\" : " + JSON.stringify(arr) + "}",
+					params.url = host + "allCell/countRSRP_Index.do";
+				}else if(item = "receiverate"){
+					params.xAxisName = translate(secondItem);
+					params.title = "下载速率与无线环境关联分析";
+					if (secondItem == "RSRP" || secondItem == "RSRQ" ||secondItem == "SINR" ) {
+						//params.params = "{\"cellid\" : \"" + null + "\",\"type\" : \"" + secondItem + "\", \"dates\" : " + JSON.stringify(arr) + "}",
+						params.params = "{\"type\" : \"" + secondItem + "\", \"dates\" : " + JSON.stringify(arr) + "}",
+						params.url = host + "allCell/countRate_Network.do";
+					} else if(secondItem == "access" || secondItem == "maintain" || secondItem == "mobility" || secondItem == "integri" || secondItem == "capacity" || secondItem == "comprehensive") {
+						params.params = "{\"index\" : \"" + secondItem + "\", \"dates\" : " + JSON.stringify(arr) + "}",
+						params.url = host + "allCell/countRate_Kpi.do";
+					}
+				}
+				drawStackedBarChart(params);
+			}
+		});
+		
+		function translate(name){
+			switch(name){
+			case "deviceBrand":{
+				return "终端品牌";
+			}
+			case "appName":{
+				return "应用名称";
+			}
+			case "cpuRate":{
+				return "CPU利用率";
+			}
+			case "memoryrate":{
+				return "内存占用率";
+			}
+			case "RSRP":{
+				return "RSRP";
+			}
+			case "RSRQ":{
+				return "RSRQ";
+			}
+			case "SINR":{
+				return "SINR";
+			}
+			case "access":{
+				return "接入类指标";
+			}
+			case "maintain":{
+				return "保持类指标";
+			}
+			case "mobility":{
+				return "移动类指标";
+			}
+			case "integri":{
+				return "完整类指标";
+			}
+			case "capacity":{
+				return "容量类指标";
+			}
+			case "comprehensive":{
+				return "综合指标";
+			}
+			case "receiverate":{
+				return "下载速率";
+			}
+			default:{
+				return "";
+			}
+			}
+		}
+	
+	});
+</script>
+
+</head>
+
+<body>
+
+<div class = "frame" >
+
+	<div style="margin: 5px;text-align: center;">
+		开始时间：<input type = "text" id = "startDatetime" readonly >
+		结束时间：<input type = "text" id = "endDatetime" readonly >
+		小&nbsp;&nbsp;区：
+		<select id = "cellSelector"  class="select2">
+			<option></option>
+		</select>
+	</div>
+	<div style="position: relative;z-index:0;">
+		<table id="table"></table>
+ 		<div id="pager"></div>
+ 	</div>
+
+	<div style="margin-top: 30px;text-align: center;">
+		异常事件分析：
+		<select id="analysisType" style="width: 180px;" class="select2">
+			<option value="default" selected = "selected">- - 分析类别 - -</option>
+			<option value="terminal">终端原因统计分析</option>
+			<option value="wireless">无线侧原因统计分析</option>
+			<option value="relatation">关联分析</option>
+		</select>
+		<select id="Item" class="select2">
+			<option value="default" selected = "selected">- - 请先选择分析类别 - -</option>
+		</select>
+		<select id="secondItem" style="width: 180px;" class="select2">
+			<option value="default" selected = "selected">- - 关联分析可选 - -</option>
+		</select>
+		<br/>
+		<input type="button" id="showChart" style="margin-top: 5px" value="分析结果" />
+	</div>
+
+	<div id="chart" style="height: 450px; margin-top: 30px;"></div>
+
+</div>
+
+	<script type="text/javascript">
+
+	</script>
+</body>
+
+</html>
+
+

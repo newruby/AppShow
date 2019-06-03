@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>usersManage.html</title>
+	
+    <meta name="keywords" content="keyword1,keyword2,keyword3">
+    <meta name="description" content="this is my page">
+    <meta name="content-type" content="text/html; charset=UTF-8">
+    
+<link rel="stylesheet" href="jqGrid/css/ui.jqgrid-bootstrap.css" />
+<link rel="stylesheet" href="bootstrap/css/bootstrap.css" />
+
+<script type="text/javascript" src="plugin/jquery-3.2.1.min.js"></script>
+<script type="text/javascript" src="bootstrap/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="jqGrid/js/jquery.jqGrid.min.js"></script>
+<script type="text/javascript" src="jqGrid/js/grid.locale-cn.js"></script>
+<script type="text/javascript">
+	$(function() {
+		var params = {
+			"url" : host + "user/findAllAdmin.do",
+			"postData" : {},
+			"success" : function(data) {
+				showGrid(data);
+			},
+		};
+		queryGridData(params);
+		
+		function queryGridData(params){
+			$.ajax({
+				"url" : params.url,
+				"type" : "POST",
+				"data" : JSON.stringify(params.postData),
+				"dataType" : "json",
+				"contentType" : "application/json;charest=UTF-8",
+				"success" : params.success,
+				"error" : function() {
+					alert("ERROR!");
+				}
+			});
+		}
+		function showGrid(params){
+			if(params.data == null){
+				alert("未找到数据");
+				return;
+			}
+			$.jgrid.gridUnload("userTable");
+			$("#userTable").jqGrid({
+				styleUI : 'Bootstrap',
+				data : params.data,
+				datatype : "local",
+				height : 'auto',
+				autowidth : true,
+				colNames : params.colNames,
+				colModel : params.colModel,
+				rowNum : 10,
+				rowList : [ 10, 20, 30 ],
+				pager : "#userPager",
+				sortname : params.sortname,
+				sortorder : params.sortorder,
+				caption : params.caption,
+				viewrecords : true,
+				rownumbers: true,
+				shrinkToFit : false,
+				emptyrecords : "无数据记录",
+				ondblClickRow : params.ondblClickRow
+			}).jqGrid("navGrid", "#userPager", {
+				edit : false,
+				add : false,
+				del : false,
+				beforeRefresh : function(){
+					var params = gridStack[gridStack.length-1];
+					if(params.postData.dates != null){
+						params.postData.dates = getTimeRange();
+					}
+					queryGridData(params);
+				}
+			});
+		}
+	});
+</script>
+  </head>
+  
+  <body>
+  	<div style="position: relative;z-index:0;">
+		<table id="userTable"></table>
+ 		<div id="userPager"></div>
+ 	</div>
+  </body>
+</html>
